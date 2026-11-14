@@ -112,7 +112,7 @@ impl BackendManager {
 
             let result = free_port().and_then(|port| {
                 inner.port = port;
-                spawn_process(app, port, &inner.token)
+                spawn_process(port, &inner.token)
             });
             match result {
                 Ok(mut child) => {
@@ -288,7 +288,7 @@ fn backend_command() -> Result<Command, String> {
     ))
 }
 
-fn spawn_process(_app: &AppHandle, port: u16, token: &str) -> Result<Child, String> {
+fn spawn_process(port: u16, token: &str) -> Result<Child, String> {
     let mut command = backend_command()?;
     command
         .env("FWA_PORT", port.to_string())

@@ -19,14 +19,23 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
-    return tmp_path / "datos"
+    # ``resolve`` evita diferencias por rutas cortas de Windows (p. ej. RUNNER~1).
+    return tmp_path.resolve() / "datos"
 
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
-    path = tmp_path / "proyectos"
+    path = tmp_path.resolve() / "proyectos"
     path.mkdir()
     return path
+
+
+def make_symlink(link: Path, target: Path) -> None:
+    """Crea un enlace simbólico; omite la prueba si el sistema no lo permite (Windows)."""
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError:
+        pytest.skip("Este sistema no permite crear enlaces simbólicos sin privilegios.")
 
 
 @pytest.fixture

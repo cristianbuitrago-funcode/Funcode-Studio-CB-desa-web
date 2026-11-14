@@ -11,6 +11,7 @@ from fwa.security.paths import (
     slugify,
     validate_workspace_dir,
 )
+from tests.conftest import make_symlink
 
 
 @pytest.mark.parametrize(
@@ -31,6 +32,7 @@ def test_slugify(name: str, expected: str) -> None:
 
 
 def test_resolve_within_accepts_inner_paths(tmp_path: Path) -> None:
+    tmp_path = tmp_path.resolve()
     assert resolve_within(tmp_path, "src/index.html") == tmp_path.resolve() / "src" / "index.html"
     assert resolve_within(tmp_path, ".") == tmp_path.resolve()
 
@@ -58,12 +60,13 @@ def test_resolve_within_rejects_symlink_escape(tmp_path: Path) -> None:
     root.mkdir()
     outside = tmp_path / "secreto"
     outside.mkdir()
-    (root / "enlace").symlink_to(outside, target_is_directory=True)
+    make_symlink(root / "enlace", outside)
     with pytest.raises(UnsafePathError):
         resolve_within(root, "enlace/clave.txt")
 
 
 def test_validate_workspace_dir(tmp_path: Path) -> None:
+    tmp_path = tmp_path.resolve()
     assert validate_workspace_dir(str(tmp_path / "nuevo")) == (tmp_path / "nuevo").resolve()
     for bad in ("", "   ", "relativa", "a\x00b"):
         with pytest.raises(UnsafePathError):
@@ -73,10 +76,11 @@ def test_validate_workspace_dir(tmp_path: Path) -> None:
 
 
 def test_assert_safe_to_delete(tmp_path: Path) -> None:
+    tmp_path = tmp_path.resolve()
     project = tmp_path / "trabajo" / "proyecto"
     project.mkdir(parents=True)
     assert assert_safe_to_delete(project) == project.resolve()
-    for protected in (Path.home(), Path("/"), Path.home().parent):
+    for protected in (Path.home(), Path(Path.home().anchor), Path.home().parent):
         with pytest.raises(UnsafePathError):
             assert_safe_to_delete(protected)
     with pytest.raises(UnsafePathError):

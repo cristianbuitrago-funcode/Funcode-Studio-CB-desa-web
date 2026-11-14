@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import AUTH, BASE_URL
+from tests.conftest import AUTH, BASE_URL, make_symlink
 
 
 def _create(client: TestClient, workspace: Path, name: str = "Tienda de tecnología") -> dict:  # type: ignore[type-arg]
@@ -176,7 +176,7 @@ def test_delete_refuses_symlinked_project_folder(
 
             shutil.rmtree(child)
     directory.rmdir()
-    directory.symlink_to(victim, target_is_directory=True)
+    make_symlink(directory, victim)
     response = client.post(
         f"/api/v1/projects/{project['id']}/delete",
         json={"confirm_name": project["name"], "delete_files": True},
