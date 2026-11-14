@@ -35,3 +35,8 @@ coverage/
 Thumbs.db
 .idea/
 .vscode/
+
+# Backend empaquetado para la aplicación de escritorio (se genera al compilar)
+desktop/src-tauri/binaries/*
+!desktop/src-tauri/binaries/.gitkeep
+backend/dist/

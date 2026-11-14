@@ -1,0 +1,135 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/space-grotesk";
+
+/*
+ * Identidad visual de Funcode Studio CB.
+ * Valores tomados del sitio del estudio: azul marino, azul eléctrico como
+ * acento, cian y toques dorados; Inter para texto y Space Grotesk para títulos.
+ */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --fw-bg: #050a18;
+  --fw-bg-2: #081225;
+  --fw-surface: #0b172e;
+  --fw-surface-2: #0f1f3d;
+  --fw-line: rgba(140, 170, 255, 0.14);
+  --fw-line-strong: rgba(140, 170, 255, 0.28);
+  --fw-text: #eef3ff;
+  --fw-muted: #a9b6d3;
+  --fw-faint: #8391b1;
+  --fw-blue: #2f6bff;
+  --fw-blue-2: #4d8dff;
+  --fw-blue-soft: #7cb4ff;
+  --fw-cyan: #38c6ff;
+  --fw-gold: #f2c14e;
+  --fw-ok: #4ade80;
+  --fw-danger: #ff8080;
+  --fw-on-accent: #ffffff;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --fw-bg: #f3f6fc;
+  --fw-bg-2: #e9eef9;
+  --fw-surface: #ffffff;
+  --fw-surface-2: #eef3fd;
+  --fw-line: rgba(20, 50, 120, 0.14);
+  --fw-line-strong: rgba(20, 50, 120, 0.3);
+  --fw-text: #0b172e;
+  --fw-muted: #3f4f72;
+  --fw-faint: #5c6b8c;
+  --fw-blue: #2457e6;
+  --fw-blue-2: #1d4ed8;
+  --fw-blue-soft: #1e49c4;
+  --fw-cyan: #0b7fb3;
+  --fw-gold: #8a5d00;
+  --fw-ok: #15803d;
+  --fw-danger: #c62828;
+  --fw-on-accent: #ffffff;
+}
+
+@theme inline {
+  --color-bg: var(--fw-bg);
+  --color-bg-2: var(--fw-bg-2);
+  --color-surface: var(--fw-surface);
+  --color-surface-2: var(--fw-surface-2);
+  --color-line: var(--fw-line);
+  --color-line-strong: var(--fw-line-strong);
+  --color-text: var(--fw-text);
+  --color-muted: var(--fw-muted);
+  --color-faint: var(--fw-faint);
+  --color-blue: var(--fw-blue);
+  --color-blue-2: var(--fw-blue-2);
+  --color-blue-soft: var(--fw-blue-soft);
+  --color-cyan: var(--fw-cyan);
+  --color-gold: var(--fw-gold);
+  --color-ok: var(--fw-ok);
+  --color-danger: var(--fw-danger);
+  --color-on-accent: var(--fw-on-accent);
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--fw-bg);
+    color: var(--fw-text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  :focus-visible {
+    outline: 2px solid var(--fw-gold);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--fw-blue) 45%, transparent);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fw-line-strong) transparent;
+  }
+}
+
+@keyframes fw-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

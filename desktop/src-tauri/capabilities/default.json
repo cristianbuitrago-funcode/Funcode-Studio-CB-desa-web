@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permisos mínimos de la ventana principal: eventos y diálogo para elegir carpeta. Sin acceso directo al sistema de archivos ni a la ejecución de programas.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:allow-open"]
+}
