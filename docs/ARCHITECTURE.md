@@ -1,6 +1,8 @@
 # Arquitectura de Funcode Web Architect
 
-Versión del documento: Fase 0. Estado: **propuesta pendiente de aprobación**.
+Versión del documento: Fase 1. La arquitectura fue aprobada al cierre de la Fase 0. Las secciones 2, 3, 4 (parte de persistencia), 7 y 9 describen código que ya existe; el resto sigue siendo diseño para fases posteriores.
+
+Plataforma principal: **Windows 11**. La arquitectura no depende de él: el mismo código compila en Linux (comprobado) y está preparado para macOS (sin comprobar).
 
 ## 1. Visión general
 
@@ -42,15 +44,20 @@ La aplicación se compone de tres procesos locales con responsabilidades separad
 
 | Aspecto | Diseño |
 |---|---|
-| Arranque | El núcleo Rust de Tauri inicia el backend como proceso hijo («sidecar») y lo detiene al cerrar la aplicación. |
-| Transporte | HTTP sobre `127.0.0.1` en un puerto libre elegido al arrancar. Nunca se escucha en `0.0.0.0`. |
-| Autenticación | Tauri genera un token aleatorio por sesión y lo entrega al backend (variable de entorno) y a la interfaz (comando Tauri). Toda petición lo envía en una cabecera; sin token, se rechaza. |
+| Arranque | El núcleo Rust de Tauri inicia el backend como proceso hijo y vigila que siga vivo. Si cae, lo reinicia hasta 3 veces con esperas crecientes; después informa el error. |
+| Transporte | HTTP sobre `127.0.0.1` en un puerto libre elegido en cada arranque. La dirección no es configurable: nunca se escucha en la red local. |
+| Autenticación | Tauri genera un token aleatorio (244 bits) por sesión y lo entrega al backend (variable de entorno) y a la interfaz (comando Tauri, solo en memoria). Toda petición lo envía en `Authorization: Bearer`; sin token, se rechaza con 401. |
+| Origen y host | El backend rechaza peticiones cuyo `Origin` no sea la interfaz de la aplicación (403) y cuyo `Host` no sea su propio loopback y puerto (400, frena DNS rebinding). CORS solo admite esos orígenes. No se usan cookies, por lo que no hay sesión que un sitio externo pueda aprovechar (CSRF). |
+| Apagado | La aplicación mantiene abierta la entrada estándar del backend. Al cerrarla (salida normal) el backend termina de forma ordenada; si no lo hace en 6 s, se fuerza. Si la aplicación muere de forma abrupta, el sistema cierra esa entrada y el backend se apaga solo: no quedan procesos huérfanos. |
+| Instancias duplicadas | Una sola ventana (la segunda enfoca la primera) y un solo backend por directorio de datos (bloqueo de archivo exclusivo). |
 | Órdenes y consultas | API REST con JSON, validada con Pydantic. El contrato OpenAPI que genera FastAPI se usa para generar los tipos TypeScript del cliente, de modo que interfaz y backend no puedan desincronizarse. |
 | Progreso en vivo | Server-Sent Events (SSE): un flujo de eventos por proyecto (avance de tareas, registros, texto generado). |
 | Operaciones largas | Nunca bloquean una petición: la API devuelve un identificador de tarea y el avance llega por SSE. Todo evento se guarda también en SQLite, así que la interfaz puede reconstruir el estado tras reiniciar. |
-| Salud | `GET /health` para que Tauri sepa cuándo el backend está listo y lo reinicie si falla. |
+| Salud | `GET /health` (público, sin datos del equipo). La interfaz muestra siempre el estado: Iniciando, Conectado, Desconectado, Error o Cerrando, y se reconecta sola con esperas crecientes. |
 
-Empaquetado: en desarrollo el backend se ejecuta con `uv`; para distribución se congela en un ejecutable con PyInstaller y se incluye como sidecar de Tauri, de modo que el usuario final no necesita instalar Python.
+Empaquetado: en desarrollo el backend se ejecuta con `uv` (también de forma independiente, sin la ventana); para distribución se congela en un ejecutable con PyInstaller (`backend/packaging/build_sidecar.py`) que Tauri incluye junto a la aplicación, de modo que el usuario final no necesita instalar Python.
+
+La interfaz nunca habla con el backend desde los componentes visuales: usa una capa de servicios (`desktop/src/services/`) sobre un cliente HTTP único (`desktop/src/lib/api/`), y un gestor de conexión (`desktop/src/lib/connection-manager.ts`).
 
 ## 3. Backend: capas
 
@@ -85,7 +92,19 @@ El orquestador convierte una descripción en un **grafo de tareas** persistente.
 
 Estados de una tarea: `pendiente → lista → en_ejecución → implementada → probada → validada`, con salidas a `fallida`, `bloqueada` y `esperando_usuario`.
 
-**Continuidad:** el estado vive en la base de datos, no en la conversación con un modelo. Cada llamada a la IA se construye a partir de la especificación, las decisiones registradas y los archivos relevantes del proyecto. Al reabrir la aplicación, las tareas `en_ejecución` interrumpidas vuelven a `lista` y el trabajo continúa.
+**Continuidad:** el estado vive en la base de datos, no en la conversación con un modelo. Cada llamada a la IA se construye a partir de la especificación, las decisiones registradas y los archivos relevantes del proyecto.
+
+Se guarda: la descripción original, la especificación, el plan de tareas, el estado y las dependencias de cada tarea, sus resultados y errores, los archivos generados (en la carpeta del proyecto y su Git), el historial de eventos y el último punto de ejecución válido.
+
+Ya implementado en la Fase 1 (`orchestrator/task_store.py`):
+
+- Estados persistentes: `pending`, `running`, `completed`, `failed`, `cancelled`, `interrupted`, `waiting_user`, con transiciones validadas.
+- **Clave de idempotencia** por tarea: una misma operación no se registra ni se ejecuta dos veces.
+- **Recuperación al arrancar:** toda tarea que figuraba en ejecución pasa a `interrupted`. Solo se reanudan automáticamente las marcadas como seguras de repetir; las demás piden revisión. Una tarea completada nunca se repite.
+
+Si el computador está apagado o la aplicación cerrada, el trabajo se detiene. La aplicación recupera el estado al volver a abrirse; no ejecuta nada mientras está cerrada.
+
+Los estados de calidad (implementada, probada, validada) se añadirán sobre estos estados de ejecución cuando existan el Tester y los criterios de aceptación (fases 5 y 9).
 
 **Proyectos grandes:** la especificación se divide en módulos (por ejemplo catálogo, carrito, pedidos, panel administrativo). Cada módulo es un subgrafo que se genera, prueba y valida por separado, con contexto limitado a lo que necesita.
 
@@ -133,6 +152,23 @@ Adaptadores iniciales:
 | `google` | Modelos Gemini | Sí |
 
 Los modelos **no se escriben en el código**: se consultan al proveedor (`listar_modelos`) y el usuario elige. Así la aplicación no queda obsoleta cuando aparecen modelos nuevos.
+
+### 6.1.1 Capacidades de cada modelo
+
+Que un proveedor sea compatible con una API no dice qué puede hacer cada modelo. Cada modelo tendrá una ficha de capacidades:
+
+| Capacidad | Origen del dato |
+|---|---|
+| Ventana de contexto | Lo informa el proveedor, cuando lo hace |
+| Soporte de imágenes | Proveedor, o comprobación |
+| Soporte de herramientas | Proveedor, o comprobación |
+| Generación estructurada | Comprobación real con una petición de prueba |
+| Programación y razonamiento | Resultado de las evaluaciones propias por modelo; si no hay, «sin evaluar» |
+| Limitaciones conocidas | Notas de las evaluaciones y del usuario |
+
+Cada dato lleva su origen: informado por el proveedor, comprobado por la aplicación, indicado por el usuario o desconocido. Un dato desconocido nunca se trata como «sí».
+
+Cada tipo de tarea declara lo que necesita (por ejemplo, generación estructurada y un contexto mínimo). El enrutador **no asigna automáticamente** un modelo que no cumpla esos requisitos: lo señala y pide al usuario elegir otro o aceptar el riesgo de forma explícita. Cada sustitución por un modelo de respaldo se registra con su motivo (fallo de conexión, límite de uso, capacidad insuficiente).
 
 Hay dos familias adicionales con interfaz propia: **búsqueda web** (para el Investigador) e **imágenes** (para Multimedia). Añadir un proveedor es añadir un archivo de adaptador y registrarlo; ningún motor cambia.
 
@@ -188,8 +224,8 @@ La interfaz indicará en cada función si requiere conexión, clave, suscripció
 
 ## 8. Vista previa
 
-- Los sitios estáticos se sirven desde un servidor local de solo lectura limitado a la carpeta del proyecto.
-- Los proyectos con servidor propio se ejecutan dentro del entorno aislado (ver [SECURITY.md](SECURITY.md)).
+- Nivel 1: los sitios estáticos se sirven desde un servidor local de solo lectura limitado a la carpeta del proyecto.
+- Niveles 2 y 3: los proyectos con servidor propio se ejecutan dentro del entorno aislado (ver [SECURITY.md](SECURITY.md)). Sin contenedores no se ejecutan automáticamente.
 - La vista previa se muestra en un marco con origen distinto al de la interfaz, sin acceso a las funciones de Tauri ni al token del backend.
 - Tamaños: computador, tablet y móvil, más ancho libre.
 - Los errores de consola y de red del sitio se capturan y se muestran en la consola de la aplicación.
@@ -197,55 +233,70 @@ La interfaz indicará en cada función si requiere conexión, clave, suscripció
 
 ## 9. Estructura de carpetas
 
+Estado real al cierre de la Fase 1:
+
 ```
 /
-├── desktop/                     Aplicación de escritorio
+├── desktop/                         Aplicación de escritorio
 │   ├── src/
-│   │   ├── app/                 Arranque, rutas, disposición general
-│   │   ├── pages/               Dashboard, Nuevo proyecto, Entorno, IA, Configuración
-│   │   ├── components/          Componentes reutilizables de interfaz
-│   │   ├── features/
-│   │   │   ├── projects/
-│   │   │   ├── editor/
-│   │   │   ├── preview/
-│   │   │   ├── ai-settings/
-│   │   │   └── settings/
-│   │   ├── lib/api/             Cliente HTTP/SSE y tipos generados desde OpenAPI
-│   │   └── styles/              Identidad visual (tokens)
-│   └── src-tauri/               Núcleo Rust, permisos, configuración del sidecar
+│   │   ├── app/                     Arranque, rutas, disposición, tema, contexto de conexión
+│   │   ├── pages/                   Dashboard, Proyectos, Nuevo proyecto, Detalle, IA, Configuración
+│   │   ├── components/              Componentes de interfaz reutilizables
+│   │   ├── features/                Lógica por funcionalidad (projects/, system/)
+│   │   ├── services/                Interfaz de servicios hacia el backend
+│   │   ├── lib/api/                 Cliente HTTP, SSE, conexión y tipos generados (schema.d.ts)
+│   │   ├── lib/connection-manager.ts
+│   │   ├── stores/                  Estado local (Zustand)
+│   │   ├── i18n/                    Textos de la interfaz
+│   │   ├── styles/                  Identidad visual (tokens)
+│   │   └── assets/brand/            Emblema de Funcode Studio CB
+│   ├── src-tauri/                   Núcleo Rust: ventana y ciclo de vida del backend
+│   │   ├── src/{main,lib,backend}.rs
+│   │   ├── capabilities/            Permisos mínimos de la ventana
+│   │   ├── binaries/                Backend empaquetado (se genera; no está en Git)
+│   │   ├── tauri.conf.json          Configuración base (desarrollo)
+│   │   └── tauri.bundle.conf.json   Añade el backend empaquetado al instalador
+│   ├── e2e/                         Pruebas de extremo a extremo (Playwright)
+│   └── scripts/                     Generación de tipos y pruebas de humo de la ventana
 ├── backend/
-│   ├── pyproject.toml
+│   ├── pyproject.toml, uv.lock
 │   ├── src/fwa/
-│   │   ├── api/
-│   │   ├── orchestrator/
-│   │   ├── engines/
-│   │   │   ├── analyzer/  researcher/  designer/  architecture/
-│   │   │   ├── frontend/  backend/     database/  multimedia/
-│   │   │   └── testing/   repair/      optimizer/ exporter/
-│   │   ├── providers/           llm/  search/  image/
-│   │   ├── services/
-│   │   ├── sandbox/
-│   │   ├── security/
-│   │   └── db/
-│   ├── migrations/              Alembic
-│   └── tests/                   unit/  integration/
-├── templates/                   Bases y componentes reutilizables (no sitios completos)
-│   ├── ecommerce/ corporate/ educational/ informational/ custom/
-├── tests/e2e/                   Pruebas de extremo a extremo de la aplicación
+│   │   ├── main.py, app.py, config.py, errors.py, logging_setup.py
+│   │   ├── api/                     Rutas, esquemas y dependencias
+│   │   ├── orchestrator/            Estados y almacén persistente de tareas
+│   │   ├── engines/                 Vacío: un subpaquete por motor desde la Fase 2
+│   │   ├── providers/               Vacío: adaptadores de IA desde la Fase 2
+│   │   ├── services/                Proyectos, ajustes, eventos, sistema, copias, bloqueo
+│   │   ├── sandbox/                 Detección de Docker y Podman
+│   │   ├── security/                Autenticación local, rutas, redacción de secretos
+│   │   └── db/                      Modelos, sesión y migraciones (db/migrations/)
+│   ├── packaging/                   Empaquetado con PyInstaller y prueba de humo
+│   ├── scripts/                     Exportación del contrato OpenAPI
+│   └── tests/                       unit/ e integration/
+├── .github/workflows/ci.yml         Pruebas en Linux y Windows; instalador de Windows
 ├── docs/
-├── workspace/                   Solo para desarrollo; ignorado por Git
 ├── README.md
 └── CHANGELOG.md
 ```
 
+`templates/` y `workspace/` se crearán cuando tengan contenido (fases 4 y 5). No se añaden carpetas vacías.
+
 ### Cambios respecto a la estructura inicial y su justificación
 
-1. **`engines/` pasa a estar dentro de `backend/src/fwa/`.** Los motores son código Python que el orquestador importa. Como carpeta de primer nivel exigirían un segundo paquete instalable y configuración adicional sin aportar independencia real. La independencia se garantiza con contratos y con la prueba de reglas de dependencia.
-2. **`backend/agents/` se elimina.** Su función coincide con la de los motores; mantener ambas carpetas duplicaría conceptos.
-3. **Se añade `backend/.../sandbox/`**, separado de `security/`, porque la ejecución aislada es un subsistema propio.
-4. **`desktop/src/` agrupa por funcionalidad (`features/`)** en lugar de tener `editor/`, `preview/` y `settings/` sueltos; es la misma idea, pero escala mejor.
-5. **`workspace/generated-projects/` no forma parte del producto instalado.** En producción los proyectos van al directorio que elija el usuario. La carpeta del repositorio se usa solo durante el desarrollo.
-6. **`templates/` contiene piezas reutilizables y estructuras base**, no plantillas de sitio completas, para cumplir el requisito de identidad propia en cada proyecto.
+Aprobados en la Fase 0:
+
+1. **`engines/` está dentro de `backend/src/fwa/`.** Los motores son código Python que el orquestador importa. La independencia se garantiza con contratos y con una prueba automática de reglas de importación.
+2. **`backend/agents/` no existe.** Su función coincide con la de los motores.
+3. **`sandbox/` separado de `security/`**, porque la ejecución aislada es un subsistema propio.
+4. **`desktop/src/` agrupa por funcionalidad (`features/`).**
+5. **Los proyectos generados no viven en el repositorio**, sino en el directorio que elija el usuario.
+6. **`templates/` contendrá piezas reutilizables**, no plantillas de sitio completas.
+
+Introducidos en la Fase 1:
+
+7. **Las migraciones están dentro del paquete** (`backend/src/fwa/db/migrations/`) y no en `backend/migrations/`: la aplicación instalada debe poder migrar la base de datos del usuario al arrancar, así que deben viajar con el ejecutable.
+8. **Las pruebas de extremo a extremo están en `desktop/e2e/`** y no en `tests/e2e/` en la raíz: usan las dependencias y la configuración de la interfaz.
+9. **Se añade `desktop/src/services/`** como interfaz explícita entre la interfaz y el backend, para que ningún componente visual haga peticiones directamente.
 
 ## 10. Requisitos de hardware y software
 
@@ -253,7 +304,7 @@ La interfaz indicará en cada función si requiere conexión, clave, suscripció
 
 | | Mínimo | Recomendado |
 |---|---|---|
-| Sistema | Windows 10/11, macOS 12+ o Linux con WebKitGTK 4.1 | – |
+| Sistema | Windows 11 (plataforma principal). Previsto: macOS 12+ y Linux con WebKitGTK 4.1 | – |
 | Procesador | 4 núcleos | 8 núcleos |
 | Memoria | 8 GB | 16 GB |
 | Disco | 2 GB más el espacio de los proyectos | SSD con 20 GB libres |
@@ -271,4 +322,21 @@ Los proyectos grandes con backend y base de datos requieren, en la práctica, un
 
 ### Para desarrollar la aplicación
 
-Node.js 22, pnpm, Rust estable, Python 3.12 o 3.13, uv, Git y las bibliotecas de sistema de Tauri para cada plataforma (WebView2 en Windows, Xcode Command Line Tools en macOS, WebKitGTK 4.1 en Linux).
+Node.js 22, pnpm, Rust estable, Python 3.12 o 3.13, uv, Git y las bibliotecas de sistema de Tauri para cada plataforma (ver tabla).
+
+### Particularidades por sistema operativo
+
+| Aspecto | Windows 11 | macOS | Linux |
+|---|---|---|---|
+| Motor de la ventana | WebView2 (incluido en Windows 11) | WKWebView | WebKitGTK 4.1 |
+| Para compilar | Microsoft C++ Build Tools | Xcode Command Line Tools | `libwebkit2gtk-4.1-dev` y relacionadas |
+| Origen de la interfaz | `http://tauri.localhost` | `tauri://localhost` | `tauri://localhost` |
+| Datos de la aplicación | `%LOCALAPPDATA%\Funcode Studio CB\Funcode Web Architect` | `~/Library/Application Support/…` | `~/.local/share/…` |
+| Almacén de claves (Fase 2) | Administrador de credenciales | Llavero | Secret Service |
+| Proceso del backend | Sin ventana de consola (`CREATE_NO_WINDOW`) | – | – |
+| Bloqueo de instancia | `msvcrt.locking` | `fcntl.flock` | `fcntl.flock` |
+| Nombres de carpeta | Se evitan nombres reservados (CON, NUL, COM1…) | – | – |
+| Borrado de proyectos | Se retira el atributo de solo lectura que Git pone a sus archivos | – | – |
+| Estado | Compilado y probado en integración continua; validación manual pendiente | Sin probar | Compilado y probado bajo pantalla virtual |
+
+El backend empaquetado debe generarse en el mismo sistema para el que se compila la aplicación: PyInstaller no compila de forma cruzada.

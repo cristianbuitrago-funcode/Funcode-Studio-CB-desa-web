@@ -12,7 +12,7 @@ Criterios comunes a todas las fases (además de los propios):
 
 ---
 
-## Fase 0. Preparación y arquitectura — *terminada, pendiente de aprobación*
+## Fase 0. Preparación y arquitectura — *terminada y aprobada (2026-11-14)*
 
 **Entregables:** inspección del entorno, arquitectura, sistema de IA, seguridad, estructura, riesgos, dependencias, documentación, criterios de aceptación.
 
@@ -20,21 +20,32 @@ Criterios comunes a todas las fases (además de los propios):
 - [x] Entorno inspeccionado y versiones comprobadas.
 - [x] Los ocho documentos obligatorios existen.
 - [x] Riesgos y limitaciones identificados.
-- [ ] El usuario aprueba las decisiones marcadas como «requiere decisión del usuario».
+- [x] El usuario aprobó la arquitectura, con Windows 11 como plataforma principal, el aislamiento en tres niveles y cuatro ajustes (continuidad, seguridad de la comunicación local, capacidades de los modelos y protección de claves).
 
-## Fase 1. Aplicación de escritorio
+## Fase 1. Aplicación de escritorio — *implementada y probada; pendiente de validación en Windows 11 y de aprobación*
 
-**Tareas:** proyecto Tauri 2 + React + TypeScript + Tailwind; backend FastAPI con SQLite y Alembic; arranque del sidecar con token; cliente tipado desde OpenAPI; navegación; dashboard; gestión inicial de proyectos (crear, listar, abrir, renombrar, archivar, eliminar con confirmación); identidad visual base; integración continua.
+**Tareas:** proyecto Tauri 2 + React + TypeScript + Tailwind; backend FastAPI con SQLite y Alembic; arranque y apagado del backend con token; cliente tipado desde OpenAPI; navegación; dashboard; gestión inicial de proyectos; configuración; identidad visual; base persistente del orquestador; integración continua.
 
-**Aceptación:**
-- La ventana abre en la plataforma principal y muestra el estado del backend.
-- Si el backend se detiene, la interfaz lo informa y se recupera al reiniciarlo.
-- Una petición sin token es rechazada (prueba automática).
-- Crear un proyecto genera su carpeta, su repositorio Git y su registro; persiste tras reiniciar.
-- Eliminar un proyecto pide confirmación y crea copia de seguridad.
-- Todos los botones visibles ejecutan una acción real; las secciones aún no construidas se muestran como «disponible en la fase N», sin controles falsos.
-- Pruebas: unitarias del backend, de componentes y una prueba de extremo a extremo del flujo «crear proyecto».
-- Se genera un instalador de prueba en la plataforma principal.
+**Criterios de aprobación fijados por el usuario** (estado detallado y evidencias en [PROJECT_STATUS.md](PROJECT_STATUS.md)):
+
+| # | Criterio | Estado |
+|---|---|---|
+| 1 | Aplicación de escritorio Tauri funcional | Probado en Linux (pantalla virtual). Windows: ver PROJECT_STATUS |
+| 2 | La interfaz React carga correctamente | Probado |
+| 3 | El backend puede iniciarse y detenerse | Probado |
+| 4 | Comunicación entre procesos protegida | Probado |
+| 5 | Dashboard implementado | Probado |
+| 6 | Gestión inicial de proyectos | Probado |
+| 7 | Los datos persisten tras reiniciar | Probado |
+| 8 | Estado del sistema visible | Probado |
+| 9 | Pruebas automatizadas | Ejecutadas |
+| 10 | Documentación actualizada | Hecho |
+| 11 | Sin errores críticos sin documentar | Ver «Errores conocidos» |
+| 12 | Informe de validación | Entregado |
+
+Ninguno está **validado** hasta que el usuario ejecute la aplicación en Windows 11 y la apruebe.
+
+**Alcance que se movió a fases posteriores**, sin controles ficticios en la interfaz: archivar proyectos y cambiar su estado a mano (el estado lo fijará el orquestador, Fase 2); abrir la carpeta del proyecto desde la aplicación (Fase 8, junto al explorador de archivos); ESLint (se añadirá con el editor, Fase 8; hoy la calidad estática de la interfaz la cubre `tsc` en modo estricto).
 
 ## Fase 2. Analizador de instrucciones
 
