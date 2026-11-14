@@ -74,7 +74,7 @@ Respecto a lo previsto en la Fase 0: no se usó `tauri-plugin-shell` (DT-017); `
 Detalle, cifras y cobertura de los diez puntos pedidos en [TESTING.md](TESTING.md).
 
 - **Linux:** backend 95 aprobadas y 1 omitida de 96; interfaz 36 de 36; extremo a extremo 9 de 9; núcleo Rust 3 de 3; prueba de humo del backend empaquetado; prueba de humo de la ventana real bajo pantalla virtual.
-- **Windows (integración continua):** __WINDOWS_SUMMARY__
+- **Windows (integración continua):** backend 96 de 96; núcleo Rust 3 de 3; backend empaquetado con PyInstaller y su prueba de humo; compilación de la aplicación y del instalador NSIS; prueba de humo de la ventana 7 de 7 (abre, inicia el backend, escucha solo en 127.0.0.1, exige el token, y el backend se detiene tanto al cerrar la ventana como al terminar la aplicación de forma abrupta). [Ejecución n.º 1](https://github.com/cristianbuitrago-funcode/Funcode-Studio-CB-desa-web/actions/runs/43634800113).
 
 ### Pruebas pendientes en Windows 11
 

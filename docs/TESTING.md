@@ -94,7 +94,35 @@ Además: recuperación de tareas tras un cierre inesperado y no repetición de o
 
 #### Ejecutado en Windows mediante integración continua — 2026-11-14
 
-__WINDOWS_CI__
+Ejecución n.º 1 del flujo *CI* ([enlace](https://github.com/cristianbuitrago-funcode/Funcode-Studio-CB-desa-web/actions/runs/43634800113)), sobre el cambio `a8359fa`. Equipo `windows-latest` de GitHub (Windows Server), Rust 1.100, Python 3.13. Todos los trabajos terminaron correctamente.
+
+| Conjunto | Pruebas | Aprobadas | Fallidas | Omitidas | Observaciones |
+|---|---|---|---|---|---|
+| Backend: `uv run pytest` | 96 | 96 | 0 | 0 | Incluye las de proceso real, bloqueo de instancia, enlaces simbólicos y acceso solo por loopback |
+| Backend: `ruff` y `mypy` | – | sin hallazgos | – | – | |
+| Backend empaquetado: `build_sidecar.py` + `smoke_test.py` | 6 pasos | 6 | 0 | – | `fwa-backend.exe` generado con PyInstaller en Windows |
+| Núcleo Rust: `cargo test` | 3 | 3 | 0 | 0 | |
+| Compilación de la aplicación e instalador NSIS | – | correcta | – | – | Artefacto `funcode-web-architect-windows` (26,5 MB): instalador y captura |
+| Ventana: `windows-window-smoke.ps1` | 7 pasos | 7 | 0 | – | Ver abajo |
+
+Pasos de la prueba de la ventana, tal como quedaron en el registro:
+
+1. La aplicación inició el backend empaquetado (dos procesos `fwa-backend.exe`, como es propio de PyInstaller).
+2. El backend responde y rechaza peticiones sin el token de la sesión.
+3. El backend escucha únicamente en `127.0.0.1`.
+4. La ventana está abierta, con el título «Funcode Web Architect».
+5. Se guardó una captura de pantalla.
+6. Al cerrar la ventana, la aplicación y el backend se detuvieron.
+7. Al terminar la aplicación de forma abrupta, el backend se apagó solo.
+
+En el mismo flujo, en Linux: backend 95 aprobadas y 1 omitida; interfaz 36 de 36; contrato de la API sincronizado; extremo a extremo 9 de 9.
+
+Lo que esta ejecución **no** demuestra:
+
+- No es Windows 11 ni tu computador: no hay antivirus de usuario, ni tu escala de pantalla, ni tus permisos.
+- Nadie interactuó con la ventana: no se pulsó ningún botón dentro de ella. «Examinar…», «Reiniciar backend» y la segunda instancia siguen sin probar.
+- La captura de pantalla generada en Windows no fue revisada; está en el artefacto.
+- El instalador se generó, pero no se instaló.
 
 #### Pendiente: validación manual en Windows 11
 
